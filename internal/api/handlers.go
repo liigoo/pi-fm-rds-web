@@ -209,6 +209,12 @@ func (h *Handler) ReorderPlaylist(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]interface{}{"success": true, "message": "播放顺序调整成功"})
 }
 
+// GetPlaylist 获取播放列表 GET /api/playlist
+func (h *Handler) GetPlaylist(w http.ResponseWriter, r *http.Request) {
+	items := h.playlistManager.GetAll()
+	respondJSON(w, http.StatusOK, map[string]interface{}{"success": true, "items": items})
+}
+
 // GetStatus 获取系统状态 GET /api/status
 func (h *Handler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	ps := h.processManager.GetStatus()

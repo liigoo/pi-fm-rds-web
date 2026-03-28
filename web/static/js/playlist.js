@@ -20,8 +20,8 @@ const Playlist = {
                  draggable="true">
                 <div class="track-number">${index + 1}</div>
                 <div class="track-info">
-                    <div class="track-name">${this.escapeHtml(track.name)}</div>
-                    <div class="track-duration">${this.formatDuration(track.duration)}</div>
+                    <div class="track-name">${this.escapeHtml(track.Filename || track.name || '')}</div>
+                    <div class="track-duration">${this.formatDuration(track.Duration || track.duration)}</div>
                 </div>
                 <div class="track-actions">
                     <button class="btn-play" data-index="${index}">▶</button>

@@ -73,7 +73,7 @@ func (m *manager) Start(frequency float64, audioSource io.Reader) error {
 	}
 
 	// 创建命令
-	m.cmd = exec.Command(m.binaryPath, "-freq", fmt.Sprintf("%.1f", frequency), "-audio", "-")
+	m.cmd = exec.Command("sudo", m.binaryPath, "-freq", fmt.Sprintf("%.1f", frequency), "-audio", "-")
 	m.cmd.Stdin = audioSource
 	m.audioSource = audioSource
 

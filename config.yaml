@@ -4,18 +4,18 @@ server:
 
 pifmrds:
   binary_path: "/usr/local/bin/pi_fm_rds"
-  default_frequency: 107.9
+  default_frequency: 100.0
 
 storage:
-  upload_dir: "./uploads"
-  transcoded_dir: "./transcoded"
+  upload_dir: "/data/pi-fm-rds/uploads"
+  transcoded_dir: "/data/pi-fm-rds/cache"
   max_file_size: 104857600  # 100MB
   max_total_size: 2147483648  # 2GB
 
 audio:
-  sample_rate: 22050
-  channels: 1
+  sample_rate: 44100
+  channels: 2
 
 websocket:
-  max_clients: 5
-  spectrum_fps: 10
+  max_clients: 10
+  spectrum_fps: 15

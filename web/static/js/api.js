@@ -39,12 +39,12 @@ const API = {
 
     // 启动传输
     async start() {
-        return this.request('/start', { method: 'POST' });
+        return this.request('/broadcast/start', { method: 'POST' });
     },
 
     // 停止传输
     async stop() {
-        return this.request('/stop', { method: 'POST' });
+        return this.request('/broadcast/stop', { method: 'POST' });
     },
 
     // 上传文件
@@ -52,7 +52,7 @@ const API = {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch(`${this.baseURL}/upload`, {
+        const response = await fetch(`${this.baseURL}/files/upload`, {
             method: 'POST',
             body: formData
         });

@@ -49,7 +49,7 @@
             AppState.setState({
                 frequency: status.frequency || 88.0,
                 isRunning: status.running || false,
-                playlist: playlist || []
+                playlist: (playlist && playlist.items) || []
             });
         } catch (err) {
             console.error('Failed to load initial data:', err);

@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/liigoo/pi-fm-rds-go/internal/api"
 	"github.com/liigoo/pi-fm-rds-go/internal/audio"
 	"github.com/liigoo/pi-fm-rds-go/internal/config"
 	"github.com/liigoo/pi-fm-rds-go/internal/playlist"
@@ -188,28 +189,42 @@ func performStartupChecks(managers *Managers, cfg *config.Config) error {
 func setupRoutes(managers *Managers, cfg *config.Config) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	// API 路由（将在后续任务中实现）
+	// 创建 API handler
+	h := api.NewHandler(managers.process, managers.storage, managers.playlist, managers.audio, managers.wsHub)
+
+	// API 路由
+	cors := api.CORS()
+	wrap := func(fn http.HandlerFunc) http.Handler { return cors(fn) }
+
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
 	})
-
-	// WebSocket 路由（将在后续任务中实现）
-	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		// WebSocket 升级逻辑将在后续任务中实现
-		http.Error(w, "WebSocket endpoint not yet implemented", http.StatusNotImplemented)
-	})
-
-	// 静态文件服务（将在后续任务中实现）
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			w.Header().Set("Content-Type", "text/html")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("<html><body><h1>Pi FM RDS Server</h1><p>Server is running</p></body></html>"))
-			return
+	mux.Handle("/api/frequency", wrap(h.SetFrequency))
+	mux.Handle("/api/broadcast/start", wrap(h.StartBroadcast))
+	mux.Handle("/api/broadcast/stop", wrap(h.StopBroadcast))
+	mux.Handle("/api/files/upload", wrap(h.UploadFile))
+	mux.Handle("/api/files", wrap(h.ListFiles))
+	mux.Handle("/api/files/", wrap(h.DeleteFile))
+	mux.Handle("/api/playlist/add", wrap(h.AddToPlaylist))
+	mux.Handle("/api/playlist/reorder", wrap(h.ReorderPlaylist))
+	mux.Handle("/api/playlist", wrap(h.GetPlaylist))
+	mux.Handle("/api/playlist/", wrap(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			h.RemoveFromPlaylist(w, r)
+		} else {
+			h.GetPlaylist(w, r)
 		}
-		http.NotFound(w, r)
+	}))
+	mux.Handle("/api/status", wrap(h.GetStatus))
+	mux.HandleFunc("/ws", h.HandleWebSocket)
+
+	// 静态文件服务
+	webDir := "web"
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(webDir+"/static"))))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, webDir+"/templates/index.html")
 	})
 
 	log.Printf("Routes configured")

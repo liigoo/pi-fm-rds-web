@@ -59,6 +59,13 @@ const Controls = {
         this.startBtn?.addEventListener('click', async () => {
             try {
                 await API.start();
+                AppState.setState({ isRunning: true });
+                setTimeout(async () => {
+                    try {
+                        const status = await API.getStatus();
+                        AppState.setState({ isRunning: status.running || false, frequency: status.frequency || 88.0 });
+                    } catch (_) {}
+                }, 800);
             } catch (err) {
                 alert('启动失败: ' + err.message);
             }
@@ -68,9 +75,8 @@ const Controls = {
         this.stopBtn?.addEventListener('click', async () => {
             try {
                 await API.stop();
-            } catch (err) {
-                alert('停止失败: ' + err.message);
-            }
+            } catch (_) {}
+            AppState.setState({ isRunning: false });
         });
 
         // 文件上传
@@ -87,7 +93,7 @@ const Controls = {
                 alert('上传成功');
                 e.target.value = '';
                 const playlist = await API.getPlaylist();
-                AppState.setState({ playlist });
+                AppState.setState({ playlist: (playlist && playlist.items) || [] });
             } catch (err) {
                 alert('上传失败: ' + err.message);
             }
