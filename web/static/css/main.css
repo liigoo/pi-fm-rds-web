@@ -1,0 +1,320 @@
+/* CSS Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #333;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* 头部 */
+.header {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header h1 {
+    font-size: 28px;
+    color: #667eea;
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #ccc;
+}
+
+.status-dot.connected {
+    background: #10b981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+.status-dot.disconnected {
+    background: #ef4444;
+}
+
+.status-text {
+    font-size: 14px;
+    color: #666;
+}
+
+/* 主内容区 */
+.main-content {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 24px;
+}
+
+.control-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.visualization-panel,
+.playlist-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* 卡片 */
+.card {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.card h2 {
+    font-size: 18px;
+    margin-bottom: 16px;
+    color: #667eea;
+}
+
+/* 频率控制 */
+.frequency-control {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.frequency-display {
+    text-align: center;
+    padding: 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 8px;
+    color: white;
+}
+
+.frequency-value {
+    font-size: 48px;
+    font-weight: bold;
+}
+
+.frequency-unit {
+    font-size: 24px;
+    margin-left: 8px;
+}
+
+.frequency-slider {
+    width: 100%;
+    height: 8px;
+    border-radius: 4px;
+    outline: none;
+    -webkit-appearance: none;
+    background: #e5e7eb;
+}
+
+.frequency-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #667eea;
+    cursor: pointer;
+}
+
+.frequency-input {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 16px;
+    text-align: center;
+}
+
+/* 播放控制 */
+.playback-controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.status-display {
+    padding: 12px;
+    background: #f3f4f6;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.status-running {
+    color: #10b981;
+    font-weight: bold;
+}
+
+.status-stopped {
+    color: #6b7280;
+}
+
+/* 按钮 */
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s;
+    flex: 1;
+}
+
+.btn-primary {
+    background: #667eea;
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #5568d3;
+}
+
+.btn-secondary {
+    background: #6b7280;
+    color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: #4b5563;
+}
+
+.btn-upload {
+    background: #10b981;
+    color: white;
+    width: 100%;
+}
+
+.btn-upload:hover {
+    background: #059669;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* 频谱可视化 */
+#spectrumCanvas {
+    width: 100%;
+    height: 300px;
+    background: #1f2937;
+    border-radius: 8px;
+}
+
+/* 播放列表 */
+.playlist-container {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.empty-playlist {
+    text-align: center;
+    padding: 40px;
+    color: #9ca3af;
+}
+
+.playlist-item {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    border-bottom: 1px solid #e5e7eb;
+    cursor: move;
+    transition: background 0.2s;
+}
+
+.playlist-item:hover {
+    background: #f9fafb;
+}
+
+.playlist-item.active {
+    background: #ede9fe;
+    border-left: 4px solid #667eea;
+}
+
+.playlist-item.dragging {
+    opacity: 0.5;
+}
+
+.track-number {
+    width: 40px;
+    text-align: center;
+    color: #9ca3af;
+    font-weight: bold;
+}
+
+.track-info {
+    flex: 1;
+    padding: 0 12px;
+}
+
+.track-name {
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.track-duration {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.track-actions .btn-play {
+    padding: 6px 12px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.track-actions .btn-play:hover {
+    background: #5568d3;
+}
+
+/* 响应式设计 */
+@media (max-width: 1024px) {
+    .main-content {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    body {
+        padding: 12px;
+    }
+
+    .header {
+        flex-direction: column;
+        gap: 16px;
+        text-align: center;
+    }
+
+    .frequency-value {
+        font-size: 36px;
+    }
+
+    .playback-controls {
+        flex-direction: column;
+    }
+}

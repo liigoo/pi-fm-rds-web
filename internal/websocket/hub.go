@@ -153,6 +153,7 @@ func (h *Hub) Broadcast(message []byte) error {
 	}
 }
 
+
 // SendControl 发送控制命令
 func (h *Hub) SendControl(msg ControlMessage) error {
 	select {
@@ -161,4 +162,9 @@ func (h *Hub) SendControl(msg ControlMessage) error {
 	default:
 		return apperrors.New(apperrors.ErrWebSocketDisconnected, "control queue full")
 	}
+}
+
+// Register 注册客户端（公开方法）
+func (h *Hub) Register(client *Client) {
+	h.register <- client
 }

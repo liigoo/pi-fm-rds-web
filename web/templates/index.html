@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi FM RDS 控制台</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🎵 Pi FM RDS 控制台</h1>
+            <div class="connection-status" id="connectionStatus">
+                <span class="status-dot"></span>
+                <span class="status-text">连接中...</span>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <section class="control-panel">
+                <div class="card">
+                    <h2>📡 频率控制</h2>
+                    <div class="frequency-control">
+                        <div class="frequency-display">
+                            <span class="frequency-value" id="frequencyValue">88.0</span>
+                            <span class="frequency-unit">MHz</span>
+                        </div>
+                        <input type="range" id="frequencySlider"
+                               min="87.5" max="108.0" step="0.1" value="88.0"
+                               class="frequency-slider">
+                        <input type="number" id="frequencyInput"
+                               min="87.5" max="108.0" step="0.1" value="88.0"
+                               class="frequency-input">
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>🎮 播放控制</h2>
+                    <div class="playback-controls">
+                        <button id="startBtn" class="btn btn-primary">启动传输</button>
+                        <button id="stopBtn" class="btn btn-secondary">停止传输</button>
+                    </div>
+                    <div class="status-display">
+                        <span>状态：</span>
+                        <span id="statusText" class="status-stopped">已停止</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>📁 文件上传</h2>
+                    <div class="upload-controls">
+                        <input type="file" id="uploadInput" accept="audio/*" style="display: none;">
+                        <button id="uploadBtn" class="btn btn-upload">选择文件</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="visualization-panel">
+                <div class="card">
+                    <h2>📊 频谱可视化</h2>
+                    <canvas id="spectrumCanvas"></canvas>
+                </div>
+            </section>
+
+            <section class="playlist-panel">
+                <div class="card">
+                    <h2>🎵 播放列表</h2>
+                    <div id="playlistContainer" class="playlist-container"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/js/state.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/websocket.js"></script>
+    <script src="/static/js/spectrum.js"></script>
+    <script src="/static/js/playlist.js"></script>
+    <script src="/static/js/controls.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

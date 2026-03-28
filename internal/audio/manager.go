@@ -235,13 +235,9 @@ func (m *Manager) streamSpectrum() {
 		case <-m.stopChan:
 			return
 		default:
-			if !m.running {
-				return
-			}
-
-			// 读取音频数据
+			// 读取音频数据（在锁内检查 running 状态）
 			m.mu.Lock()
-			if m.currentSource == nil {
+			if !m.running || m.currentSource == nil {
 				m.mu.Unlock()
 				return
 			}
