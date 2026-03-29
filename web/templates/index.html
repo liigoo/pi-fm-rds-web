@@ -7,67 +7,90 @@
     <link rel="stylesheet" href="/static/css/main.css">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <h1>🎵 Pi FM RDS 控制台</h1>
-            <div class="connection-status" id="connectionStatus">
+    <div class="console-shell">
+        <header class="console-header">
+            <div class="brand">
+                <h1>PI FM RDS CONSOLE</h1>
+                <p>Analog Broadcast Deck</p>
+            </div>
+            <div class="connection-status" id="connectionStatus" aria-live="polite">
                 <span class="status-dot"></span>
                 <span class="status-text">连接中...</span>
             </div>
         </header>
 
-        <main class="main-content">
-            <section class="control-panel">
-                <div class="card">
-                    <h2>📡 频率控制</h2>
-                    <div class="frequency-control">
-                        <div class="frequency-display">
-                            <span class="frequency-value" id="frequencyValue">88.0</span>
-                            <span class="frequency-unit">MHz</span>
-                        </div>
-                        <input type="range" id="frequencySlider"
-                               min="87.5" max="108.0" step="0.1" value="88.0"
-                               class="frequency-slider">
-                        <input type="number" id="frequencyInput"
-                               min="87.5" max="108.0" step="0.1" value="88.0"
-                               class="frequency-input">
-                    </div>
+        <main class="console-layout">
+            <section class="panel panel-spectrum" aria-label="音频频谱区域">
+                <div class="panel-title-row">
+                    <h2>音频频谱</h2>
+                    <span id="playStateBadge" class="state-badge stopped">已停止</span>
                 </div>
+                <canvas id="spectrumCanvas" aria-label="实时频谱图"></canvas>
+                <div class="spectrum-footer">
+                    <span class="mono-label">NOW PLAYING</span>
+                    <span id="currentTrackName" class="track-now">--</span>
+                </div>
+            </section>
 
-                <div class="card">
-                    <h2>🎮 播放控制</h2>
-                    <div class="playback-controls">
-                        <button id="startBtn" class="btn btn-primary">启动传输</button>
-                        <button id="stopBtn" class="btn btn-secondary">停止传输</button>
+            <aside class="right-column">
+                <section class="panel panel-frequency" aria-label="频率控制">
+                    <h2>FM 频率</h2>
+                    <div class="frequency-display">
+                        <span class="frequency-value" id="frequencyValue">88.0</span>
+                        <span class="frequency-unit">MHz</span>
                     </div>
-                    <div class="status-display">
-                        <span>状态：</span>
+                    <input type="range" id="frequencySlider" min="87.5" max="108.0" step="0.1" value="88.0" class="frequency-slider" aria-label="频率滑块">
+                    <input type="number" id="frequencyInput" min="87.5" max="108.0" step="0.1" value="88.0" class="frequency-input" aria-label="频率输入框">
+                </section>
+
+                <section class="panel panel-library" aria-label="文件与队列管理">
+                    <div class="panel-title-row">
+                        <h2>文件列表</h2>
+                        <div class="inline-actions">
+                            <input type="file" id="uploadInput" accept="audio/*" hidden>
+                            <button id="uploadBtn" class="btn">上传</button>
+                            <button id="deleteSelectedBtn" class="btn btn-danger">删除</button>
+                        </div>
+                    </div>
+
+                    <div class="file-list-wrap">
+                        <table class="file-table">
+                            <thead>
+                                <tr>
+                                    <th>文件名</th>
+                                    <th>大小</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fileListBody">
+                                <tr>
+                                    <td colspan="3" class="empty-row">暂无文件</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="queue-block">
+                        <div class="queue-title">顺序播放队列</div>
+                        <div id="playlistContainer" class="playlist-container"></div>
+                    </div>
+                </section>
+
+                <section class="panel panel-controls" aria-label="播放控制">
+                    <h2>播放控制</h2>
+                    <div class="transport-row">
+                        <button id="prevBtn" class="btn btn-control">上一曲</button>
+                        <button id="playBtn" class="btn btn-play-round" aria-label="播放">播放</button>
+                        <button id="pauseBtn" class="btn btn-control">暂停</button>
+                        <button id="nextBtn" class="btn btn-control">下一曲</button>
+                        <button id="stopBtn" class="btn btn-stop">停止</button>
+                    </div>
+                    <div class="status-row">
+                        <span class="mono-label">STATUS</span>
                         <span id="statusText" class="status-stopped">已停止</span>
                     </div>
-                </div>
-
-                <div class="card">
-                    <h2>📁 文件上传</h2>
-                    <div class="upload-controls">
-                        <input type="file" id="uploadInput" accept="audio/*" style="display: none;">
-                        <button id="uploadBtn" class="btn btn-upload">选择文件</button>
-                    </div>
-                </div>
-            </section>
-
-            <section class="visualization-panel">
-                <div class="card">
-                    <h2>📊 频谱可视化</h2>
-                    <canvas id="spectrumCanvas"></canvas>
-                </div>
-            </section>
-
-            <section class="playlist-panel">
-                <div class="card">
-                    <h2>🎵 播放列表</h2>
-                    <div id="playlistContainer" class="playlist-container"></div>
-                </div>
-            </section>
+                </section>
+            </aside>
         </main>
     </div>
 
@@ -75,6 +98,7 @@
     <script src="/static/js/api.js"></script>
     <script src="/static/js/websocket.js"></script>
     <script src="/static/js/spectrum.js"></script>
+    <script src="/static/js/files.js"></script>
     <script src="/static/js/playlist.js"></script>
     <script src="/static/js/controls.js"></script>
     <script src="/static/js/app.js"></script>

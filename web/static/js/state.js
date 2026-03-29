@@ -3,28 +3,29 @@ const AppState = {
     data: {
         frequency: 88.0,
         isRunning: false,
+        isPaused: false,
         playlist: [],
+        files: [],
+        selectedFileID: '',
         currentTrack: -1,
+        currentFileID: '',
         connectionStatus: 'disconnected',
         spectrumData: []
     },
 
     listeners: [],
 
-    // 订阅状态变化
     subscribe(listener) {
         this.listeners.push(listener);
     },
 
-    // 更新状态
     setState(updates) {
         Object.assign(this.data, updates);
         this.notify();
     },
 
-    // 通知所有监听器
     notify() {
-        this.listeners.forEach(listener => {
+        this.listeners.forEach((listener) => {
             try {
                 listener(this.data);
             } catch (err) {
@@ -33,7 +34,6 @@ const AppState = {
         });
     },
 
-    // 获取状态
     getState() {
         return { ...this.data };
     }

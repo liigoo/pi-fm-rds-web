@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -62,6 +64,7 @@ func main() {
 	// 5. 启动 WebSocket Hub
 	go managers.wsHub.Run()
 	log.Printf("WebSocket hub started")
+	startSpectrumBroadcaster(managers.audio, managers.wsHub, cfg.WebSocket.SpectrumFPS)
 
 	// 6. 配置路由
 	mux := setupRoutes(managers, cfg)
@@ -204,10 +207,16 @@ func setupRoutes(managers *Managers, cfg *config.Config) *http.ServeMux {
 	mux.Handle("/api/frequency", wrap(h.SetFrequency))
 	mux.Handle("/api/broadcast/start", wrap(h.StartBroadcast))
 	mux.Handle("/api/broadcast/stop", wrap(h.StopBroadcast))
+	mux.Handle("/api/playback/play", wrap(h.Play))
+	mux.Handle("/api/playback/pause", wrap(h.Pause))
+	mux.Handle("/api/playback/stop", wrap(h.StopPlayback))
+	mux.Handle("/api/playback/next", wrap(h.Next))
+	mux.Handle("/api/playback/prev", wrap(h.Prev))
 	mux.Handle("/api/files/upload", wrap(h.UploadFile))
 	mux.Handle("/api/files", wrap(h.ListFiles))
 	mux.Handle("/api/files/", wrap(h.DeleteFile))
 	mux.Handle("/api/playlist/add", wrap(h.AddToPlaylist))
+	mux.Handle("/api/playlist/play", wrap(h.Play))
 	mux.Handle("/api/playlist/reorder", wrap(h.ReorderPlaylist))
 	mux.Handle("/api/playlist", wrap(h.GetPlaylist))
 	mux.Handle("/api/playlist/", wrap(func(w http.ResponseWriter, r *http.Request) {
@@ -229,6 +238,73 @@ func setupRoutes(managers *Managers, cfg *config.Config) *http.ServeMux {
 
 	log.Printf("Routes configured")
 	return mux
+}
+
+func startSpectrumBroadcaster(audioMgr *audio.Manager, hub *websocket.Hub, fps int) {
+	if fps <= 0 {
+		fps = 15
+	}
+
+	go func() {
+		minInterval := time.Second / time.Duration(fps)
+		lastSent := time.Now().Add(-minInterval)
+
+		for samples := range audioMgr.GetSpectrumStream() {
+			if time.Since(lastSent) < minInterval {
+				continue
+			}
+			lastSent = time.Now()
+
+			payload, err := json.Marshal(map[string]interface{}{
+				"type": "spectrum",
+				"data": compressSpectrum(samples, 64),
+			})
+			if err != nil {
+				continue
+			}
+			_ = hub.Broadcast(payload)
+		}
+	}()
+}
+
+func compressSpectrum(samples []int16, buckets int) []int {
+	if len(samples) == 0 || buckets <= 0 {
+		return []int{}
+	}
+
+	out := make([]int, buckets)
+	step := float64(len(samples)) / float64(buckets)
+	if step < 1 {
+		step = 1
+	}
+
+	for i := 0; i < buckets; i++ {
+		start := int(math.Floor(float64(i) * step))
+		end := int(math.Floor(float64(i+1) * step))
+		if end <= start {
+			end = start + 1
+		}
+		if start >= len(samples) {
+			start = len(samples) - 1
+		}
+		if end > len(samples) {
+			end = len(samples)
+		}
+
+		maxVal := int16(0)
+		for _, v := range samples[start:end] {
+			abs := v
+			if abs < 0 {
+				abs = -abs
+			}
+			if abs > maxVal {
+				maxVal = abs
+			}
+		}
+		out[i] = int(maxVal)
+	}
+
+	return out
 }
 
 // shutdownManagers 关闭所有管理器

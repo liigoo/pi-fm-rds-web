@@ -11,22 +11,23 @@ class WSClient {
     connect() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsURL = `${protocol}//${window.location.host}/ws`;
-
         this.ws = new WebSocket(wsURL);
 
         this.ws.onopen = () => {
-            console.log('WebSocket connected');
             this.reconnectAttempts = 0;
             this.reconnectDelay = 1000;
             AppState.setState({ connectionStatus: 'connected' });
         };
 
         this.ws.onmessage = (event) => {
-            try {
-                const message = JSON.parse(event.data);
-                this.handleMessage(message);
-            } catch (err) {
-                console.error('WebSocket message error:', err);
+            const chunks = String(event.data || '').split('\n').filter(Boolean);
+            for (const chunk of chunks) {
+                try {
+                    const message = JSON.parse(chunk);
+                    this.handleMessage(message);
+                } catch (err) {
+                    console.error('WebSocket message error:', err);
+                }
             }
         };
 
@@ -35,7 +36,6 @@ class WSClient {
         };
 
         this.ws.onclose = () => {
-            console.log('WebSocket disconnected');
             AppState.setState({ connectionStatus: 'disconnected' });
             this.scheduleReconnect();
         };
@@ -47,32 +47,33 @@ class WSClient {
         switch (type) {
             case 'status':
                 AppState.setState({
-                    isRunning: data.running,
-                    frequency: data.frequency
+                    isRunning: !!data.running,
+                    isPaused: !!data.paused,
+                    frequency: data.frequency || AppState.getState().frequency
                 });
                 break;
             case 'spectrum':
-                AppState.setState({ spectrumData: data });
+                AppState.setState({ spectrumData: Array.isArray(data) ? data : [] });
                 break;
             case 'playlist':
-                AppState.setState({ playlist: data });
+                AppState.setState({ playlist: Array.isArray(data) ? data : [] });
                 break;
             case 'error':
                 console.error('Server error:', data);
                 break;
+            default:
+                break;
         }
 
-        this.messageHandlers.forEach(handler => handler(message));
+        this.messageHandlers.forEach((handler) => handler(message));
     }
 
     scheduleReconnect() {
-        this.reconnectAttempts++;
+        this.reconnectAttempts += 1;
         const delay = Math.min(
             this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
             this.maxReconnectDelay
         );
-
-        console.log(`Reconnecting in ${delay}ms...`);
         setTimeout(() => this.connect(), delay);
     }
 

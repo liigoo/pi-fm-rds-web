@@ -302,3 +302,37 @@ func TestRemoveCurrentlyPlaying(t *testing.T) {
 	assert.Len(t, items, 2)
 }
 
+func TestSetCurrentPrevAndReset(t *testing.T) {
+	m := NewManager()
+	m.Add("file1", "song1.mp3", 1*time.Minute)
+	m.Add("file2", "song2.mp3", 2*time.Minute)
+	m.Add("file3", "song3.mp3", 3*time.Minute)
+
+	fileID, err := m.SetCurrent(1)
+	require.NoError(t, err)
+	assert.Equal(t, "file2", fileID)
+	assert.Equal(t, 1, m.CurrentIndex())
+
+	fileID, err = m.Prev()
+	require.NoError(t, err)
+	assert.Equal(t, "file1", fileID)
+	assert.Equal(t, 0, m.CurrentIndex())
+
+	_, err = m.Prev()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "beginning")
+
+	m.ResetCurrent()
+	assert.Equal(t, -1, m.CurrentIndex())
+	assert.Nil(t, m.GetCurrent())
+}
+
+func TestIndexOf(t *testing.T) {
+	m := NewManager()
+	m.Add("file1", "song1.mp3", 1*time.Minute)
+	m.Add("file2", "song2.mp3", 2*time.Minute)
+
+	assert.Equal(t, 0, m.IndexOf("file1"))
+	assert.Equal(t, 1, m.IndexOf("file2"))
+	assert.Equal(t, -1, m.IndexOf("missing"))
+}

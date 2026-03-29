@@ -1,4 +1,4 @@
-// 播放列表
+// 播放队列视图
 const Playlist = {
     init() {
         this.container = document.getElementById('playlistContainer');
@@ -9,54 +9,70 @@ const Playlist = {
     updateUI(state) {
         if (!this.container) return;
 
-        if (state.playlist.length === 0) {
-            this.container.innerHTML = '<div class="empty-playlist">暂无曲目</div>';
+        const list = Array.isArray(state.playlist) ? state.playlist : [];
+        if (list.length === 0) {
+            this.container.innerHTML = '<div class="empty-row">队列为空，上传后可自动加入</div>';
             return;
         }
 
-        this.container.innerHTML = state.playlist.map((track, index) => `
-            <div class="playlist-item ${index === state.currentTrack ? 'active' : ''}"
-                 data-index="${index}"
-                 draggable="true">
-                <div class="track-number">${index + 1}</div>
-                <div class="track-info">
-                    <div class="track-name">${this.escapeHtml(track.Filename || track.name || '')}</div>
-                    <div class="track-duration">${this.formatDuration(track.Duration || track.duration)}</div>
+        this.container.innerHTML = list.map((track, index) => {
+            const active = track.FileID === state.currentFileID || index === state.currentTrack;
+            const name = this.escapeHtml(track.Filename || track.filename || `Track ${index + 1}`);
+            return `
+                <div class="playlist-item ${active ? 'active' : ''}" data-index="${index}" draggable="true">
+                    <div class="track-number">${index + 1}</div>
+                    <div class="track-info">
+                        <div class="track-name" title="${name}">${name}</div>
+                        <div class="track-duration">${this.formatDuration(track.Duration || track.duration)}</div>
+                    </div>
+                    <div class="track-actions">
+                        <button class="btn btn-play" data-action="play" data-index="${index}">播放</button>
+                        <button class="btn btn-danger" data-action="remove" data-file-id="${track.FileID}">移除</button>
+                    </div>
                 </div>
-                <div class="track-actions">
-                    <button class="btn-play" data-index="${index}">▶</button>
-                </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         this.bindEvents();
     },
 
     bindEvents() {
-        // 播放按钮
-        this.container.querySelectorAll('.btn-play').forEach(btn => {
+        this.container.querySelectorAll('button[data-action="play"]').forEach((btn) => {
             btn.addEventListener('click', async (e) => {
-                const index = parseInt(e.target.dataset.index);
+                e.stopPropagation();
+                const index = parseInt(e.currentTarget.dataset.index, 10);
                 try {
                     await API.playTrack(index);
-                    AppState.setState({ currentTrack: index });
+                    await App.loadSnapshot();
                 } catch (err) {
                     alert('播放失败: ' + err.message);
                 }
             });
         });
 
-        // 拖拽排序
+        this.container.querySelectorAll('button[data-action="remove"]').forEach((btn) => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const fileID = e.currentTarget.dataset.fileId;
+                try {
+                    await API.removeFromPlaylist(fileID);
+                    await App.loadSnapshot();
+                } catch (err) {
+                    alert('移除失败: ' + err.message);
+                }
+            });
+        });
+
         const items = this.container.querySelectorAll('.playlist-item');
-        items.forEach(item => {
+        items.forEach((item) => {
             item.addEventListener('dragstart', (e) => {
                 e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/plain', e.target.dataset.index);
-                e.target.classList.add('dragging');
+                e.dataTransfer.setData('text/plain', e.currentTarget.dataset.index);
+                e.currentTarget.classList.add('dragging');
             });
 
             item.addEventListener('dragend', (e) => {
-                e.target.classList.remove('dragging');
+                e.currentTarget.classList.remove('dragging');
             });
 
             item.addEventListener('dragover', (e) => {
@@ -64,28 +80,29 @@ const Playlist = {
                 e.dataTransfer.dropEffect = 'move';
             });
 
-            item.addEventListener('drop', (e) => {
+            item.addEventListener('drop', async (e) => {
                 e.preventDefault();
-                const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
-                const toIndex = parseInt(e.currentTarget.dataset.index);
+                const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                const toIndex = parseInt(e.currentTarget.dataset.index, 10);
+                if (Number.isNaN(fromIndex) || Number.isNaN(toIndex) || fromIndex === toIndex) {
+                    return;
+                }
 
-                if (fromIndex !== toIndex) {
-                    this.reorderPlaylist(fromIndex, toIndex);
+                try {
+                    await API.reorderPlaylist(fromIndex, toIndex);
+                    await App.loadSnapshot();
+                } catch (err) {
+                    alert('排序失败: ' + err.message);
                 }
             });
         });
     },
 
-    reorderPlaylist(fromIndex, toIndex) {
-        const state = AppState.getState();
-        const playlist = [...state.playlist];
-        const [item] = playlist.splice(fromIndex, 1);
-        playlist.splice(toIndex, 0, item);
-        AppState.setState({ playlist });
-    },
+    formatDuration(duration) {
+        if (!duration) return '--:--';
+        const seconds = typeof duration === 'number' ? duration : Number(duration);
+        if (!Number.isFinite(seconds) || seconds <= 0) return '--:--';
 
-    formatDuration(seconds) {
-        if (!seconds) return '--:--';
         const mins = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
         return `${mins}:${secs.toString().padStart(2, '0')}`;

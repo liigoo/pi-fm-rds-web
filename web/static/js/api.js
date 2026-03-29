@@ -2,34 +2,37 @@
 const API = {
     baseURL: '/api',
 
-    // 通用请求方法
     async request(endpoint, options = {}) {
-        try {
-            const response = await fetch(`${this.baseURL}${endpoint}`, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...options.headers
-                },
-                ...options
-            });
+        const headers = { ...(options.headers || {}) };
+        const hasFormData = options.body instanceof FormData;
 
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            return await response.json();
-        } catch (err) {
-            console.error('API Error:', err);
-            throw err;
+        if (!hasFormData && !headers['Content-Type']) {
+            headers['Content-Type'] = 'application/json';
         }
+
+        const response = await fetch(`${this.baseURL}${endpoint}`, {
+            ...options,
+            headers
+        });
+
+        const contentType = response.headers.get('Content-Type') || '';
+        const isJSON = contentType.includes('application/json');
+        const payload = isJSON ? await response.json() : await response.text();
+
+        if (!response.ok) {
+            const message = isJSON && payload && payload.error
+                ? payload.error
+                : `HTTP ${response.status}: ${response.statusText}`;
+            throw new Error(message);
+        }
+
+        return payload;
     },
 
-    // 获取状态
     async getStatus() {
         return this.request('/status');
     },
 
-    // 设置频率
     async setFrequency(frequency) {
         return this.request('/frequency', {
             method: 'POST',
@@ -37,39 +40,54 @@ const API = {
         });
     },
 
-    // 启动传输
-    async start() {
-        return this.request('/broadcast/start', { method: 'POST' });
+    async play(payload = {}) {
+        return this.request('/playback/play', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
     },
 
-    // 停止传输
-    async stop() {
-        return this.request('/broadcast/stop', { method: 'POST' });
+    async pause() {
+        return this.request('/playback/pause', { method: 'POST' });
     },
 
-    // 上传文件
+    async stopPlayback() {
+        return this.request('/playback/stop', { method: 'POST' });
+    },
+
+    async next() {
+        return this.request('/playback/next', { method: 'POST' });
+    },
+
+    async prev() {
+        return this.request('/playback/prev', { method: 'POST' });
+    },
+
     async uploadFile(file) {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch(`${this.baseURL}/files/upload`, {
+        return this.request('/files/upload', {
             method: 'POST',
-            body: formData
+            body: formData,
+            headers: {}
         });
-
-        if (!response.ok) {
-            throw new Error(`Upload failed: ${response.statusText}`);
-        }
-
-        return await response.json();
     },
 
-    // 获取播放列表
+    async getFiles() {
+        return this.request('/files');
+    },
+
+    async deleteFile(fileID) {
+        return this.request(`/files/${encodeURIComponent(fileID)}`, {
+            method: 'DELETE'
+        });
+    },
+
     async getPlaylist() {
         return this.request('/playlist');
     },
 
-    // 添加到播放列表
     async addToPlaylist(fileID, filename) {
         return this.request('/playlist/add', {
             method: 'POST',
@@ -77,12 +95,25 @@ const API = {
         });
     },
 
-    // 播放指定曲目
-    async playTrack(index) {
-        return this.request('/playlist/play', {
-            method: 'POST',
-            body: JSON.stringify({ index })
+    async removeFromPlaylist(fileID) {
+        return this.request(`/playlist/${encodeURIComponent(fileID)}`, {
+            method: 'DELETE'
         });
+    },
+
+    async reorderPlaylist(fromIndex, toIndex) {
+        return this.request('/playlist/reorder', {
+            method: 'POST',
+            body: JSON.stringify({ from_index: fromIndex, to_index: toIndex })
+        });
+    },
+
+    async playTrack(index) {
+        return this.play({ index });
+    },
+
+    async playFile(fileID) {
+        return this.play({ file_id: fileID });
     }
 };
 

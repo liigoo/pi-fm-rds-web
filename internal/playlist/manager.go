@@ -14,7 +14,12 @@ type Manager interface {
 	Remove(fileID string) error
 	Reorder(fromIndex, toIndex int) error
 	Next() (string, error)
+	Prev() (string, error)
 	Skip() error
+	SetCurrent(index int) (string, error)
+	IndexOf(fileID string) int
+	CurrentIndex() int
+	ResetCurrent()
 	GetCurrent() *PlaylistItem
 	GetAll() []PlaylistItem
 	Clear()
@@ -161,6 +166,28 @@ func (m *manager) Next() (string, error) {
 	return m.items[m.currentIndex].FileID, nil
 }
 
+// Prev 播放上一首
+func (m *manager) Prev() (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if len(m.items) == 0 {
+		return "", fmt.Errorf("playlist is empty")
+	}
+
+	if m.currentIndex < 0 {
+		m.currentIndex = 0
+		return m.items[m.currentIndex].FileID, nil
+	}
+
+	if m.currentIndex == 0 {
+		return "", fmt.Errorf("already at beginning of playlist")
+	}
+
+	m.currentIndex--
+	return m.items[m.currentIndex].FileID, nil
+}
+
 // Skip 跳过当前文件
 func (m *manager) Skip() error {
 	m.mu.Lock()
@@ -181,6 +208,44 @@ func (m *manager) Skip() error {
 	}
 
 	return nil
+}
+
+// SetCurrent 设置当前播放项
+func (m *manager) SetCurrent(index int) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if index < 0 || index >= len(m.items) {
+		return "", fmt.Errorf("invalid index: %d", index)
+	}
+
+	m.currentIndex = index
+	return m.items[m.currentIndex].FileID, nil
+}
+
+// IndexOf 根据 fileID 获取索引
+func (m *manager) IndexOf(fileID string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if idx, ok := m.fileIDMap[fileID]; ok {
+		return idx
+	}
+	return -1
+}
+
+// CurrentIndex 获取当前播放索引
+func (m *manager) CurrentIndex() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.currentIndex
+}
+
+// ResetCurrent 重置当前播放索引
+func (m *manager) ResetCurrent() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.currentIndex = -1
 }
 
 // GetCurrent 获取当前播放项
@@ -225,4 +290,3 @@ func (m *manager) rebuildIndexMap() {
 		m.fileIDMap[m.items[i].FileID] = i
 	}
 }
-
