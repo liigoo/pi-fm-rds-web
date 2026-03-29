@@ -22,7 +22,7 @@ const (
 
 // Magic bytes for audio format detection
 var magicBytes = map[AudioFormat][]byte{
-	FormatMP3:  {0xFF, 0xFB}, // MP3 frame sync
+	FormatMP3:  {0xFF, 0xFB},             // MP3 frame sync
 	FormatFLAC: {0x66, 0x4C, 0x61, 0x43}, // "fLaC"
 	FormatWAV:  {0x52, 0x49, 0x46, 0x46}, // "RIFF"
 }
@@ -55,6 +55,11 @@ func (t *Transcoder) DetectFormat(filePath string) (AudioFormat, error) {
 	}
 
 	// Check magic bytes
+	// MP3 with ID3 tag
+	if len(header) >= 3 && string(header[:3]) == "ID3" {
+		return FormatMP3, nil
+	}
+
 	for format, magic := range magicBytes {
 		if len(header) >= len(magic) {
 			match := true
@@ -104,7 +109,7 @@ func (t *Transcoder) Transcode(inputPath string) (string, error) {
 	cmd := exec.Command("ffmpeg",
 		"-i", inputPath,
 		"-ar", "44100", // Sample rate
-		"-ac", "2",     // Stereo
+		"-ac", "2", // Stereo
 		"-f", "wav",
 		"-y", // Overwrite
 		cachedPath,

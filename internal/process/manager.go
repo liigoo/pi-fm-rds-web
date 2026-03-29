@@ -1,10 +1,12 @@
 package process
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -72,15 +74,22 @@ func (m *manager) Start(frequency float64, audioSource io.Reader) error {
 		return fmt.Errorf("pi_fm_rds binary not found at %s", m.binaryPath)
 	}
 
-	// 创建命令
-	m.cmd = exec.Command("sudo", m.binaryPath, "-freq", fmt.Sprintf("%.1f", frequency), "-audio", "-")
-	m.cmd.Stdin = audioSource
-	m.audioSource = audioSource
-
-	// 启动进程
-	if err := m.cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start process: %w", err)
+	audioArg := "-"
+	audioInput := audioSource
+	if fileSource, ok := audioSource.(interface{ Path() string }); ok {
+		if p := fileSource.Path(); p != "" {
+			audioArg = p
+			audioInput = nil
+		}
 	}
+
+	// 创建并启动命令（优先 sudo；受限环境回退直启）
+	cmd, err := m.startCommand(frequency, audioArg, audioInput)
+	if err != nil {
+		return err
+	}
+	m.cmd = cmd
+	m.audioSource = audioSource
 
 	// 更新状态
 	m.status = ProcessStatus{
@@ -90,8 +99,8 @@ func (m *manager) Start(frequency float64, audioSource io.Reader) error {
 		StartTime: time.Now(),
 	}
 
-	// 启动监控 goroutine
-	go m.monitor()
+	// 启动监控 goroutine（绑定当前命令，避免旧进程退出覆盖新状态）
+	go m.monitor(cmd)
 
 	return nil
 }
@@ -106,25 +115,19 @@ func (m *manager) Stop() error {
 	}
 
 	// 发送 SIGTERM 信号优雅停止
-	if err := m.cmd.Process.Signal(syscall.SIGTERM); err != nil {
+	if err := m.signalManagedProcess(syscall.SIGTERM); err != nil {
 		return fmt.Errorf("failed to send SIGTERM: %w", err)
 	}
 
-	// 等待进程退出，最多 5 秒
-	done := make(chan error, 1)
-	go func() {
-		done <- m.cmd.Wait()
-	}()
-
-	select {
-	case <-done:
-		// 进程已退出
-	case <-time.After(5 * time.Second):
+	pid := m.cmd.Process.Pid
+	if !waitForProcessExit(pid, 5*time.Second) {
 		// 超时，强制终止
-		if err := m.cmd.Process.Kill(); err != nil {
+		if err := m.signalManagedProcess(syscall.SIGKILL); err != nil {
 			return fmt.Errorf("failed to kill process: %w", err)
 		}
-		<-done // 等待 Wait() 完成
+		if !waitForProcessExit(pid, 2*time.Second) {
+			return fmt.Errorf("process did not exit after SIGKILL")
+		}
 	}
 
 	// 更新状态
@@ -133,6 +136,72 @@ func (m *manager) Stop() error {
 	m.cmd = nil
 
 	return nil
+}
+
+func (m *manager) signalManagedProcess(sig syscall.Signal) error {
+	if m.cmd == nil || m.cmd.Process == nil {
+		return fmt.Errorf("process not running")
+	}
+
+	if err := m.cmd.Process.Signal(sig); err == nil || errors.Is(err, os.ErrProcessDone) {
+		return nil
+	} else if !errors.Is(err, syscall.EPERM) && !errors.Is(err, syscall.EACCES) {
+		return err
+	}
+
+	// 受权限限制时，尝试通过 sudo 发送信号（Raspberry Pi 生产环境）
+	pidNum := m.cmd.Process.Pid
+	pid := strconv.Itoa(pidNum)
+	sigName := signalName(sig)
+	_ = exec.Command("sudo", "-n", "pkill", "-"+sigName, "-P", pid).Run()
+	if err := exec.Command("sudo", "-n", "kill", "-"+sigName, pid).Run(); err != nil {
+		// 进程已在前一步退出时，kill 可能返回非零；视为成功
+		if !processAlive(pidNum) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func signalName(sig syscall.Signal) string {
+	switch sig {
+	case syscall.SIGKILL:
+		return "KILL"
+	default:
+		return "TERM"
+	}
+}
+
+func waitForProcessExit(pid int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if !processAlive(pid) {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func processAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+
+	err := syscall.Kill(pid, 0)
+	if err == nil {
+		return true
+	}
+
+	// EPERM 表示进程存在但当前用户无权限发送信号
+	if errors.Is(err, syscall.EPERM) {
+		return true
+	}
+
+	return !errors.Is(err, syscall.ESRCH)
 }
 
 // Restart 重启 PiFmRds 进程
@@ -172,6 +241,10 @@ func (m *manager) CleanupOrphans() error {
 	cmd := exec.Command("ps", "aux")
 	output, err := cmd.Output()
 	if err != nil {
+		// 受限沙箱/容器环境中可能禁止执行 ps，清理操作降级为 no-op
+		if errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EACCES) {
+			return nil
+		}
 		return fmt.Errorf("failed to list processes: %w", err)
 	}
 
@@ -210,6 +283,30 @@ func (m *manager) CleanupOrphans() error {
 	return nil
 }
 
+func (m *manager) startCommand(frequency float64, audioArg string, audioSource io.Reader) (*exec.Cmd, error) {
+	args := []string{"-freq", fmt.Sprintf("%.1f", frequency), "-audio", audioArg}
+
+	sudoCmd := exec.Command("sudo", append([]string{m.binaryPath}, args...)...)
+	if audioSource != nil {
+		sudoCmd.Stdin = audioSource
+	}
+	if err := sudoCmd.Start(); err == nil {
+		return sudoCmd, nil
+	} else if !errors.Is(err, syscall.EPERM) && !errors.Is(err, syscall.EACCES) && !errors.Is(err, exec.ErrNotFound) {
+		return nil, fmt.Errorf("failed to start process: %w", err)
+	}
+
+	// 回退：在无 sudo 或被策略拦截时，直接执行目标二进制（便于测试/受限环境运行）
+	directCmd := exec.Command(m.binaryPath, args...)
+	if audioSource != nil {
+		directCmd.Stdin = audioSource
+	}
+	if err := directCmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start process: %w", err)
+	}
+	return directCmd, nil
+}
+
 // ValidateGPIO 验证 GPIO 4 可用性
 func (m *manager) ValidateGPIO() error {
 	// 检查 GPIO 4 是否可用
@@ -237,18 +334,21 @@ func (m *manager) ValidateGPIO() error {
 }
 
 // monitor 监控进程状态
-func (m *manager) monitor() {
-	if m.cmd == nil {
+func (m *manager) monitor(cmd *exec.Cmd) {
+	if cmd == nil {
 		return
 	}
 
 	// 等待进程退出
-	_ = m.cmd.Wait()
+	_ = cmd.Wait()
 
-	// 更新状态
+	// 仅在当前管理对象仍指向该命令时更新状态，防止旧进程覆盖新进程状态
 	m.mu.Lock()
-	m.status.Running = false
-	m.status.PID = 0
+	if m.cmd == cmd {
+		m.status.Running = false
+		m.status.PID = 0
+		m.cmd = nil
+	}
 	m.mu.Unlock()
 }
 

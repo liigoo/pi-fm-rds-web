@@ -17,6 +17,7 @@ type Manager interface {
 	Upload(file io.Reader, header *multipart.FileHeader) (string, error)
 	Delete(fileID string) error
 	GetFile(fileID string) (*FileInfo, error)
+	GetFilePath(fileID string) (string, error)
 	ListFiles() ([]*FileInfo, error)
 	GetQuotaInfo() QuotaInfo
 }
@@ -152,6 +153,22 @@ func (m *manager) GetFile(fileID string) (*FileInfo, error) {
 	}
 
 	return info, nil
+}
+
+// GetFilePath 获取文件物理路径
+func (m *manager) GetFilePath(fileID string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.files[fileID]; !exists {
+		return "", fmt.Errorf("file not found: %s", fileID)
+	}
+
+	filePath := filepath.Join(m.uploadDir, fileID)
+	if _, err := os.Stat(filePath); err != nil {
+		return "", fmt.Errorf("file path not available: %w", err)
+	}
+	return filePath, nil
 }
 
 // ListFiles 列出所有文件

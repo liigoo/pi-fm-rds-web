@@ -31,6 +31,8 @@ type AudioSource interface {
 // FileSource 文件音频源
 type FileSource struct {
 	file *os.File
+	path string
+	loop bool
 }
 
 func NewFileSource(path string) (*FileSource, error) {
@@ -38,11 +40,21 @@ func NewFileSource(path string) (*FileSource, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open audio file: %w", err)
 	}
-	return &FileSource{file: file}, nil
+	return &FileSource{file: file, path: path, loop: true}, nil
 }
 
 func (f *FileSource) Read(p []byte) (n int, err error) {
-	return f.file.Read(p)
+	n, err = f.file.Read(p)
+	if err == io.EOF && f.loop {
+		if _, seekErr := f.file.Seek(0, 0); seekErr != nil {
+			return n, err
+		}
+		if n > 0 {
+			return n, nil
+		}
+		return f.file.Read(p)
+	}
+	return n, err
 }
 
 func (f *FileSource) Close() error {
@@ -50,6 +62,11 @@ func (f *FileSource) Close() error {
 		return f.file.Close()
 	}
 	return nil
+}
+
+// Path 返回音频文件路径
+func (f *FileSource) Path() string {
+	return f.path
 }
 
 // MicrophoneSource 麦克风音频源（模拟实现）

@@ -89,7 +89,10 @@ const Controls = {
             if (!file) return;
 
             try {
-                await API.uploadFile(file);
+                const uploaded = await API.uploadFile(file);
+                if (uploaded && uploaded.file_id) {
+                    await API.addToPlaylist(uploaded.file_id, file.name);
+                }
                 alert('上传成功');
                 e.target.value = '';
                 const playlist = await API.getPlaylist();

@@ -69,6 +69,14 @@ const API = {
         return this.request('/playlist');
     },
 
+    // 添加到播放列表
+    async addToPlaylist(fileID, filename) {
+        return this.request('/playlist/add', {
+            method: 'POST',
+            body: JSON.stringify({ file_id: fileID, filename })
+        });
+    },
+
     // 播放指定曲目
     async playTrack(index) {
         return this.request('/playlist/play', {

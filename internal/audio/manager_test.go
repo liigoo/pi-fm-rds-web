@@ -1,6 +1,7 @@
 package audio
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -135,5 +136,33 @@ func TestStop(t *testing.T) {
 	}
 	if stream := mgr.GetAudioStream(); stream != nil {
 		t.Error("GetAudioStream() should return nil after Stop()")
+	}
+}
+
+func TestFileSourceLoopsOnEOF(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := createTestWAVFile(t, tmpDir)
+
+	source, err := NewFileSource(testFile)
+	if err != nil {
+		t.Fatalf("NewFileSource() error = %v", err)
+	}
+	defer source.Close()
+
+	buf := make([]byte, 2048)
+	n1, err1 := source.Read(buf[:1500])
+	if err1 != nil && err1 != io.EOF {
+		t.Fatalf("first read error = %v", err1)
+	}
+	if n1 == 0 {
+		t.Fatal("first read returned no data")
+	}
+
+	n2, err2 := source.Read(buf[:1500])
+	if err2 != nil && err2 != io.EOF {
+		t.Fatalf("second read error = %v", err2)
+	}
+	if n2 == 0 {
+		t.Fatal("second read returned no data; expected looped playback data")
 	}
 }

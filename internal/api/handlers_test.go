@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -29,9 +32,9 @@ func (m *mockProcessManager) Start(freq float64, src io.Reader) error {
 	m.frequency = freq
 	return nil
 }
-func (m *mockProcessManager) Stop() error          { m.running = false; return nil }
+func (m *mockProcessManager) Stop() error             { m.running = false; return nil }
 func (m *mockProcessManager) Restart(f float64) error { m.frequency = f; return nil }
-func (m *mockProcessManager) IsRunning() bool      { return m.running }
+func (m *mockProcessManager) IsRunning() bool         { return m.running }
 func (m *mockProcessManager) GetStatus() process.ProcessStatus {
 	return process.ProcessStatus{Running: m.running, PID: 12345, Frequency: m.frequency, StartTime: time.Now()}
 }
@@ -40,10 +43,12 @@ func (m *mockProcessManager) ValidateGPIO() error   { return nil }
 
 type mockStorageManager struct {
 	files map[string]*storage.FileInfo
+	dir   string
 }
 
 func newMockStorage() *mockStorageManager {
-	return &mockStorageManager{files: make(map[string]*storage.FileInfo)}
+	dir, _ := os.MkdirTemp("", "mock-storage-*")
+	return &mockStorageManager{files: make(map[string]*storage.FileInfo), dir: dir}
 }
 
 func (m *mockStorageManager) Upload(file io.Reader, h *multipart.FileHeader) (string, error) {
@@ -59,6 +64,9 @@ func (m *mockStorageManager) Delete(id string) error {
 	return nil
 }
 func (m *mockStorageManager) GetFile(id string) (*storage.FileInfo, error) { return m.files[id], nil }
+func (m *mockStorageManager) GetFilePath(id string) (string, error) {
+	return filepath.Join(m.dir, id), nil
+}
 func (m *mockStorageManager) ListFiles() ([]*storage.FileInfo, error) {
 	files := make([]*storage.FileInfo, 0)
 	for _, f := range m.files {
@@ -108,6 +116,9 @@ func TestFrequencyHandler(t *testing.T) {
 func TestBroadcastHandlers(t *testing.T) {
 	t.Run("start broadcast", func(t *testing.T) {
 		handler, pm, _ := newTestHandler()
+		if err := handler.audioManager.PlayMicrophone("default"); err != nil {
+			t.Fatalf("failed to prepare microphone source: %v", err)
+		}
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcast/start", nil)
 		w := httptest.NewRecorder()
 		handler.StartBroadcast(w, req)
@@ -116,6 +127,43 @@ func TestBroadcastHandlers(t *testing.T) {
 		}
 		if !pm.IsRunning() {
 			t.Error("process should be running")
+		}
+	})
+
+	t.Run("start broadcast - no audio source", func(t *testing.T) {
+		handler, _, _ := newTestHandler()
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcast/start", nil)
+		w := httptest.NewRecorder()
+		handler.StartBroadcast(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("status = %v, want %v", w.Code, http.StatusBadRequest)
+		}
+	})
+
+	t.Run("start broadcast - use playlist file as source", func(t *testing.T) {
+		handler, pm, sm := newTestHandler()
+		if err := handler.playlistManager.Add("missing-file", "missing.wav", 0); err != nil {
+			t.Fatalf("failed to add first playlist item: %v", err)
+		}
+
+		fileID := "playlist-file-1"
+		filePath := filepath.Join(sm.dir, fileID)
+		if err := os.WriteFile(filePath, []byte("audio-bytes"), 0644); err != nil {
+			t.Fatalf("failed to write mock audio file: %v", err)
+		}
+		sm.files[fileID] = &storage.FileInfo{ID: fileID, Filename: "test.wav", Size: 10, Format: "audio/wav"}
+		if err := handler.playlistManager.Add(fileID, "test.wav", 0); err != nil {
+			t.Fatalf("failed to add playlist item: %v", err)
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcast/start", nil)
+		w := httptest.NewRecorder()
+		handler.StartBroadcast(w, req)
+		if w.Code != http.StatusOK {
+			t.Errorf("status = %v, want %v", w.Code, http.StatusOK)
+		}
+		if !pm.IsRunning() {
+			t.Error("process should be running after start")
 		}
 	})
 
@@ -246,6 +294,13 @@ func TestStatusHandler(t *testing.T) {
 }
 
 func TestWebSocketUpgrade(t *testing.T) {
+	// 在受限环境中，本地监听端口可能被禁止；此用例跳过以避免 panic。
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skipf("local listen not permitted in this environment: %v", err)
+	}
+	_ = l.Close()
+
 	handler, _, _ := newTestHandler()
 	go handler.wsHub.Run()
 	defer handler.wsHub.Stop()

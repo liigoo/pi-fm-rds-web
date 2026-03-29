@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path"
 	"strings"
@@ -20,6 +21,7 @@ type Handler struct {
 	storageManager  storage.Manager
 	playlistManager playlist.Manager
 	audioManager    *audio.Manager
+	transcoder      *audio.Transcoder
 	wsHub           *ws.Hub
 	upgrader        websocket.Upgrader
 }
@@ -37,6 +39,7 @@ func NewHandler(
 		storageManager:  sm,
 		playlistManager: plm,
 		audioManager:    am,
+		transcoder:      audio.NewTranscoder("/tmp/pi-fm-rds-cache"),
 		wsHub:           hub,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
@@ -76,7 +79,15 @@ func (h *Handler) StartBroadcast(w http.ResponseWriter, r *http.Request) {
 	}
 	audioStream := h.audioManager.GetAudioStream()
 	if audioStream == nil {
-		audioStream = strings.NewReader("")
+		if err := h.prepareAudioStreamFromPlaylist(); err != nil {
+			respondError(w, http.StatusBadRequest, "无可用音频源，请先上传并加入播放列表")
+			return
+		}
+		audioStream = h.audioManager.GetAudioStream()
+		if audioStream == nil {
+			respondError(w, http.StatusBadRequest, "无可用音频源，请先上传并加入播放列表")
+			return
+		}
 	}
 	status := h.processManager.GetStatus()
 	freq := status.Frequency
@@ -88,6 +99,49 @@ func (h *Handler) StartBroadcast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]interface{}{"success": true, "message": "广播已启动"})
+}
+
+func (h *Handler) prepareAudioStreamFromPlaylist() error {
+	cur := h.playlistManager.GetCurrent()
+	if cur != nil && cur.FileID != "" {
+		if err := h.playByFileID(cur.FileID); err == nil {
+			return nil
+		}
+	}
+
+	items := h.playlistManager.GetAll()
+	if len(items) == 0 {
+		return fmt.Errorf("playlist is empty")
+	}
+	for _, item := range items {
+		if item.FileID == "" {
+			continue
+		}
+		if err := h.playByFileID(item.FileID); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("no playable file in playlist")
+}
+
+func (h *Handler) playByFileID(fileID string) error {
+	filePath, err := h.storageManager.GetFilePath(fileID)
+	if err != nil {
+		return err
+	}
+
+	playPath := filePath
+	if h.transcoder != nil {
+		if format, detectErr := h.transcoder.DetectFormat(filePath); detectErr == nil && format != audio.FormatWAV {
+			transcodedPath, transcodeErr := h.transcoder.Transcode(filePath)
+			if transcodeErr != nil {
+				return transcodeErr
+			}
+			playPath = transcodedPath
+		}
+	}
+
+	return h.audioManager.PlayFile(playPath)
 }
 
 // StopBroadcast 停止广播 POST /api/broadcast/stop
