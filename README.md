@@ -10,9 +10,15 @@
 
 ## 中文
 
-Pi FM RDS Go 是一个面向树莓派的 FM/RDS 广播控制系统，使用 Go 构建后端，提供 Web 控制台进行频率调节、文件管理、播放控制、播放队列与实时频谱可视化。
+Pi FM RDS Go 是一个基于 [PiFmRds](https://github.com/christophejacquet/pifmrds) 的二次开发项目。它并不替代上游 `pi_fm_rds` 的 FM/RDS 发射能力，而是在外面包了一层面向实际使用场景的 Go 服务与 Web 控制台，把原本偏底层、命令行式的广播流程整理成可视化、可管理、可扩展的操作界面。
+
+你可以把它理解为：
+- 上游 `PiFmRds` 负责底层 FM/RDS 发射能力
+- 本项目负责服务封装、文件管理、播放控制、播放队列、频率调节和频谱可视化
+- 最终提供一个更适合树莓派长期运行和日常操作的 Web 化控制层
 
 项目核心目标：
+- 在 `PiFmRds` 外层提供一套更易用的可视化控制壳层
 - 用现代 Web UI 简化 `pi_fm_rds` 的使用门槛
 - 通过 API + WebSocket 提供可编排、可扩展的控制能力
 - 适配树莓派实机场景（部署目录、音频转码、进程管理）
@@ -168,7 +174,7 @@ scripts/           # 安装与辅助脚本
 ## 致谢
 
 特别感谢 **PiFmRds** 原作者 **Christophe Jacquet** 及社区贡献者。  
-本项目在其优秀工作的基础上构建了更易用的 Web 控制层与工程化能力。
+本项目本质上是围绕上游 `PiFmRds` 做的二次开发与外层封装：保留其底层 FM/RDS 发射能力，在其外面增加 Go 服务、HTTP API、WebSocket、文件管理、播放队列和可视化控制界面，以便更适合实际部署和日常使用。
 
 ## 许可证
 
@@ -178,9 +184,15 @@ scripts/           # 安装与辅助脚本
 
 ## English
 
-Pi FM RDS Go is a Raspberry Pi FM/RDS broadcasting control system built with Go, featuring a web console for frequency tuning, file management, playback controls, playlist orchestration, and real-time spectrum visualization.
+Pi FM RDS Go is a secondary-development project built on top of [PiFmRds](https://github.com/christophejacquet/pifmrds). It does not replace the upstream `pi_fm_rds` FM/RDS transmission engine; instead, it wraps that low-level capability with a Go service layer and a web-based control console, turning a command-line oriented workflow into a visual, operable, and extensible broadcasting system.
+
+In practice:
+- upstream `PiFmRds` provides the core FM/RDS transmission capability
+- this project adds the outer service layer, file management, playback control, playlist orchestration, frequency tuning, and spectrum visualization
+- the result is a Raspberry Pi friendly visual control shell for daily operation and long-running deployment
 
 Core goals:
+- Build a usable visual control layer around `PiFmRds`
 - Lower the operational barrier of `pi_fm_rds` with a modern web interface
 - Provide extensible control via HTTP APIs + WebSocket
 - Fit real Raspberry Pi deployment scenarios (paths, transcoding, process control)
