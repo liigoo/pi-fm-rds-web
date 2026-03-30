@@ -170,16 +170,6 @@ scripts/           # 安装与辅助脚本
 特别感谢 **PiFmRds** 原作者 **Christophe Jacquet** 及社区贡献者。  
 本项目在其优秀工作的基础上构建了更易用的 Web 控制层与工程化能力。
 
-## Star 趋势图
-
-本项目：
-
-[![Star History Chart](https://api.star-history.com/svg?repos=liigoo/pi-fm-rds-web&type=Date)](https://star-history.com/#liigoo/pi-fm-rds-web&Date)
-
-上游 PiFmRds：
-
-[![Star History Chart](https://api.star-history.com/svg?repos=ChristopheJacquet/PiFmRds&type=Date)](https://star-history.com/#ChristopheJacquet/PiFmRds&Date)
-
 ## 许可证
 
 本项目使用 [MIT License](./LICENSE)。
@@ -303,16 +293,6 @@ Environment overrides:
 ## Acknowledgements
 
 Huge thanks to **Christophe Jacquet**, the original author of **PiFmRds**, and all upstream contributors.
-
-## Star Trend
-
-This project:
-
-[![Star History Chart](https://api.star-history.com/svg?repos=liigoo/pi-fm-rds-web&type=Date)](https://star-history.com/#liigoo/pi-fm-rds-web&Date)
-
-Upstream PiFmRds:
-
-[![Star History Chart](https://api.star-history.com/svg?repos=ChristopheJacquet/PiFmRds&type=Date)](https://star-history.com/#ChristopheJacquet/PiFmRds&Date)
 
 ## License
 
