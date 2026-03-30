@@ -5,7 +5,8 @@
 [![Stars](https://img.shields.io/github/stars/liigoo/pi-fm-rds-web?style=social)](https://github.com/liigoo/pi-fm-rds-web)
 
 中文 | [English](#english)
-<img width="2082" height="1342" alt="image" src="https://github.com/user-attachments/assets/0f580602-cc33-4a85-9cf7-a73adf2f130e" />
+<img width="1162" height="764" alt="image" src="https://github.com/user-attachments/assets/c9256234-4ce9-47d1-942e-f3c0011a0089" />
+
 
 ## 中文
 
