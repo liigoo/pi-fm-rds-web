@@ -28,11 +28,16 @@ const App = {
             API.getFiles()
         ]);
 
+        const rawFrequency = Number(status?.frequency);
+        const normalizedFrequency = Number.isFinite(rawFrequency) && rawFrequency >= 87.5 && rawFrequency <= 108.0
+            ? rawFrequency
+            : 88.0;
+
         const playlistItems = Array.isArray(playlist?.items) ? playlist.items : [];
         const fileItems = Array.isArray(files?.files) ? files.files : [];
 
         AppState.setState({
-            frequency: status?.frequency || 88.0,
+            frequency: normalizedFrequency,
             isRunning: !!status?.running,
             isPaused: !!status?.paused,
             currentFileID: status?.current_file || '',

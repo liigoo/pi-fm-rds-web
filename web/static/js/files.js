@@ -30,8 +30,7 @@ const Files = {
                     <td>${sizeText}</td>
                     <td>
                         <div class="file-actions">
-                            <button class="btn" data-action="play" data-id="${file.ID}">播放</button>
-                            <button class="btn" data-action="queue" data-id="${file.ID}" data-name="${filename}">加入队列</button>
+                            <button class="btn btn-queue" data-action="queue" data-id="${file.ID}" data-name="${filename}" title="加入队列">＋</button>
                             <button class="btn btn-danger" data-action="delete" data-id="${file.ID}">删除</button>
                         </div>
                     </td>
@@ -57,9 +56,7 @@ const Files = {
                 const fileID = btn.dataset.id;
 
                 try {
-                    if (action === 'play') {
-                        await API.playFile(fileID);
-                    } else if (action === 'queue') {
+                    if (action === 'queue') {
                         await API.addToPlaylist(fileID, btn.dataset.name || '未命名文件');
                     } else if (action === 'delete') {
                         if (!confirm('确认删除该文件？')) return;
@@ -72,7 +69,7 @@ const Files = {
 
                     await App.loadSnapshot();
                 } catch (err) {
-                    const actionMap = { play: '播放', queue: '加入队列', delete: '删除' };
+                    const actionMap = { queue: '加入队列', delete: '删除' };
                     alert(`${actionMap[action] || '操作'}失败: ${err.message}`);
                 }
             });
