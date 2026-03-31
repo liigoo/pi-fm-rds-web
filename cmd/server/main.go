@@ -193,7 +193,7 @@ func setupRoutes(managers *Managers, cfg *config.Config) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// 创建 API handler
-	h := api.NewHandler(managers.process, managers.storage, managers.playlist, managers.audio, managers.wsHub)
+	h := api.NewHandler(managers.process, managers.storage, managers.playlist, managers.audio, managers.wsHub, cfg.PiFmRds.DefaultFrequency)
 
 	// API 路由
 	cors := api.CORS()

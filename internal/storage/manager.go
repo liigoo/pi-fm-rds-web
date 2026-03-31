@@ -1,13 +1,13 @@
 package storage
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -48,19 +48,28 @@ type manager struct {
 	files         map[string]*FileInfo
 }
 
+type fileMetadata struct {
+	Filename string `json:"filename"`
+	Format   string `json:"format"`
+}
+
 // NewManager 创建存储管理器
 func NewManager(uploadDir, transcodedDir string, maxFileSize, maxTotalSize int64) Manager {
 	// 确保目录存在
 	os.MkdirAll(uploadDir, 0755)
 	os.MkdirAll(transcodedDir, 0755)
 
-	return &manager{
+	m := &manager{
 		uploadDir:     uploadDir,
 		transcodedDir: transcodedDir,
 		maxFileSize:   maxFileSize,
 		maxTotalSize:  maxTotalSize,
 		files:         make(map[string]*FileInfo),
 	}
+	m.mu.Lock()
+	_ = m.refreshFilesLocked()
+	m.mu.Unlock()
+	return m
 }
 
 // Upload 上传文件
@@ -68,16 +77,13 @@ func (m *manager) Upload(file io.Reader, header *multipart.FileHeader) (string, 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if err := m.refreshFilesLocked(); err != nil {
+		return "", err
+	}
+
 	// 检查单文件大小限制
 	if header.Size > m.maxFileSize {
 		return "", fmt.Errorf("file size %d exceeds maximum %d", header.Size, m.maxFileSize)
-	}
-
-	// 检查总配额
-	currentUsed := m.calculateUsedSpace()
-	if currentUsed+header.Size > m.maxTotalSize {
-		return "", fmt.Errorf("total quota exceeded: used %d + new %d > max %d",
-			currentUsed, header.Size, m.maxTotalSize)
 	}
 
 	// 读取文件内容
@@ -92,16 +98,35 @@ func (m *manager) Upload(file io.Reader, header *multipart.FileHeader) (string, 
 		return "", fmt.Errorf("invalid audio format: %w", err)
 	}
 
-	// 生成文件 ID（使用时间戳 + SHA256 哈希确保唯一性）
-	timestamp := time.Now().UnixNano()
-	hashInput := append(data, []byte(fmt.Sprintf("%d", timestamp))...)
-	hash := sha256.Sum256(hashInput)
-	fileID := hex.EncodeToString(hash[:])
+	fileID := sanitizeFilename(header.Filename)
+	if fileID == "" {
+		return "", fmt.Errorf("invalid filename")
+	}
+
+	replacedSize := int64(0)
+	if existing, ok := m.files[fileID]; ok && existing != nil {
+		replacedSize = existing.Size
+	}
+
+	currentUsed := m.calculateUsedSpace()
+	currentUsed = currentUsed - replacedSize
+	if currentUsed+header.Size > m.maxTotalSize {
+		return "", fmt.Errorf("total quota exceeded: used %d + new %d > max %d",
+			currentUsed, header.Size, m.maxTotalSize)
+	}
 
 	// 保存文件
 	filePath := filepath.Join(m.uploadDir, fileID)
 	if err := os.WriteFile(filePath, data, 0644); err != nil {
 		return "", fmt.Errorf("failed to write file: %w", err)
+	}
+
+	if err := m.writeMetadata(fileID, &fileMetadata{
+		Filename: header.Filename,
+		Format:   format,
+	}); err != nil {
+		_ = os.Remove(filePath)
+		return "", err
 	}
 
 	// 记录文件信息
@@ -110,7 +135,7 @@ func (m *manager) Upload(file io.Reader, header *multipart.FileHeader) (string, 
 		Filename: header.Filename,
 		Size:     int64(len(data)),
 		Format:   format,
-		Duration: 0, // TODO: 实际项目中需要解析音频文件获取时长
+		Duration: 0,
 	}
 
 	return fileID, nil
@@ -120,6 +145,10 @@ func (m *manager) Upload(file io.Reader, header *multipart.FileHeader) (string, 
 func (m *manager) Delete(fileID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if err := m.refreshFilesLocked(); err != nil {
+		return err
+	}
 
 	// 检查文件是否存在
 	if _, exists := m.files[fileID]; !exists {
@@ -131,6 +160,7 @@ func (m *manager) Delete(fileID string) error {
 	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to delete file: %w", err)
 	}
+	_ = os.Remove(m.metadataPath(fileID))
 
 	// 删除转码文件（如果存在）
 	transcodedPath := filepath.Join(m.transcodedDir, fileID+".wav")
@@ -147,6 +177,10 @@ func (m *manager) GetFile(fileID string) (*FileInfo, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if err := m.refreshFilesLocked(); err != nil {
+		return nil, err
+	}
+
 	info, exists := m.files[fileID]
 	if !exists {
 		return nil, fmt.Errorf("file not found: %s", fileID)
@@ -159,6 +193,10 @@ func (m *manager) GetFile(fileID string) (*FileInfo, error) {
 func (m *manager) GetFilePath(fileID string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if err := m.refreshFilesLocked(); err != nil {
+		return "", err
+	}
 
 	if _, exists := m.files[fileID]; !exists {
 		return "", fmt.Errorf("file not found: %s", fileID)
@@ -176,6 +214,10 @@ func (m *manager) ListFiles() ([]*FileInfo, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if err := m.refreshFilesLocked(); err != nil {
+		return nil, err
+	}
+
 	files := make([]*FileInfo, 0, len(m.files))
 	for _, info := range m.files {
 		files = append(files, info)
@@ -188,6 +230,8 @@ func (m *manager) ListFiles() ([]*FileInfo, error) {
 func (m *manager) GetQuotaInfo() QuotaInfo {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	_ = m.refreshFilesLocked()
 
 	used := m.calculateUsedSpace()
 	return QuotaInfo{
@@ -204,6 +248,80 @@ func (m *manager) calculateUsedSpace() int64 {
 		total += info.Size
 	}
 	return total
+}
+
+func (m *manager) refreshFilesLocked() error {
+	entries, err := os.ReadDir(m.uploadDir)
+	if err != nil {
+		return fmt.Errorf("failed to scan upload dir: %w", err)
+	}
+
+	refreshed := make(map[string]*FileInfo, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		if strings.HasSuffix(name, ".meta.json") {
+			continue
+		}
+
+		filePath := filepath.Join(m.uploadDir, name)
+		info, err := entry.Info()
+		if err != nil {
+			return fmt.Errorf("failed to inspect file %s: %w", name, err)
+		}
+
+		fileInfo := &FileInfo{
+			ID:       name,
+			Filename: name,
+			Size:     info.Size(),
+			Duration: 0,
+		}
+
+		if meta, err := m.readMetadata(name); err == nil {
+			if meta.Filename != "" {
+				fileInfo.Filename = meta.Filename
+			}
+			fileInfo.Format = meta.Format
+		} else {
+			fileInfo.Format = detectAudioFormatFromFile(filePath)
+		}
+
+		refreshed[name] = fileInfo
+	}
+
+	m.files = refreshed
+	return nil
+}
+
+func (m *manager) metadataPath(fileID string) string {
+	return filepath.Join(m.uploadDir, fileID+".meta.json")
+}
+
+func (m *manager) writeMetadata(fileID string, meta *fileMetadata) error {
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("failed to encode metadata: %w", err)
+	}
+	if err := os.WriteFile(m.metadataPath(fileID), data, 0644); err != nil {
+		return fmt.Errorf("failed to write metadata: %w", err)
+	}
+	return nil
+}
+
+func (m *manager) readMetadata(fileID string) (*fileMetadata, error) {
+	data, err := os.ReadFile(m.metadataPath(fileID))
+	if err != nil {
+		return nil, err
+	}
+
+	var meta fileMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, err
+	}
+	return &meta, nil
 }
 
 // detectAudioFormat 检测音频格式（通过 magic bytes）
@@ -236,4 +354,32 @@ func detectAudioFormat(data []byte) (string, error) {
 	}
 
 	return "", fmt.Errorf("unsupported audio format")
+}
+
+func detectAudioFormatFromFile(filePath string) string {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	header := make([]byte, 12)
+	n, err := f.Read(header)
+	if err != nil && err != io.EOF {
+		return ""
+	}
+
+	format, err := detectAudioFormat(header[:n])
+	if err != nil {
+		return ""
+	}
+	return format
+}
+
+func sanitizeFilename(name string) string {
+	cleaned := strings.TrimSpace(filepath.Base(name))
+	if cleaned == "." || cleaned == "" {
+		return ""
+	}
+	return cleaned
 }

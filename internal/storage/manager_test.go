@@ -2,7 +2,10 @@ package storage
 
 import (
 	"bytes"
+	"encoding/json"
 	"mime/multipart"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 )
@@ -29,6 +32,9 @@ func TestFileUpload(t *testing.T) {
 
 	if fileID == "" {
 		t.Fatal("Expected non-empty file ID")
+	}
+	if fileID != "test.mp3" {
+		t.Fatalf("Expected file ID 'test.mp3', got '%s'", fileID)
 	}
 
 	// 验证文件信息
@@ -205,7 +211,7 @@ func TestConcurrentUpload(t *testing.T) {
 
 			mp3Data := createTestMP3Data()
 			header := &multipart.FileHeader{
-				Filename: "test.mp3",
+				Filename: filepath.Base(filepath.Join("nested", "test-"+string(rune('a'+idx))+".mp3")),
 				Size:     int64(len(mp3Data)),
 			}
 
@@ -244,7 +250,7 @@ func TestListFiles(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		mp3Data := createTestMP3Data()
 		header := &multipart.FileHeader{
-			Filename: "test.mp3",
+			Filename: filepath.Base(filepath.Join("group", "test-"+string(rune('a'+i))+".mp3")),
 			Size:     int64(len(mp3Data)),
 		}
 		_, err := mgr.Upload(bytes.NewReader(mp3Data), header)
@@ -260,6 +266,81 @@ func TestListFiles(t *testing.T) {
 
 	if len(files) != 3 {
 		t.Errorf("Expected 3 files, got %d", len(files))
+	}
+}
+
+func TestListFilesScansExistingUploadDirectory(t *testing.T) {
+	uploadDir := t.TempDir()
+	transcodedDir := t.TempDir()
+
+	fileID := "existing-audio.mp3"
+	filePath := filepath.Join(uploadDir, fileID)
+	if err := os.WriteFile(filePath, createTestMP3Data(), 0644); err != nil {
+		t.Fatalf("write audio file: %v", err)
+	}
+
+	meta := fileMetadata{
+		Filename: "demo-track.mp3",
+		Format:   "audio/mpeg",
+	}
+	metaBytes, err := json.Marshal(meta)
+	if err != nil {
+		t.Fatalf("marshal meta: %v", err)
+	}
+	if err := os.WriteFile(filePath+".meta.json", metaBytes, 0644); err != nil {
+		t.Fatalf("write meta: %v", err)
+	}
+
+	mgr := NewManager(uploadDir, transcodedDir, 100*1024*1024, 2*1024*1024*1024)
+	files, err := mgr.ListFiles()
+	if err != nil {
+		t.Fatalf("ListFiles failed: %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Fatalf("Expected 1 file, got %d", len(files))
+	}
+
+	if files[0].ID != fileID {
+		t.Fatalf("file ID = %s, want %s", files[0].ID, fileID)
+	}
+
+	if files[0].Filename != "demo-track.mp3" {
+		t.Fatalf("filename = %s, want demo-track.mp3", files[0].Filename)
+	}
+}
+
+func TestUploadKeepsOriginalFilenameAndOverwritesExistingFile(t *testing.T) {
+	uploadDir := t.TempDir()
+	transcodedDir := t.TempDir()
+	mgr := NewManager(uploadDir, transcodedDir, 100*1024*1024, 2*1024*1024*1024)
+
+	firstData := createTestMP3Data()
+	firstHeader := &multipart.FileHeader{Filename: "same-name.mp3", Size: int64(len(firstData))}
+	fileID, err := mgr.Upload(bytes.NewReader(firstData), firstHeader)
+	if err != nil {
+		t.Fatalf("first upload failed: %v", err)
+	}
+	if fileID != "same-name.mp3" {
+		t.Fatalf("file ID = %s, want same-name.mp3", fileID)
+	}
+
+	secondData := append(createTestMP3Data(), []byte("new-content")...)
+	secondHeader := &multipart.FileHeader{Filename: "same-name.mp3", Size: int64(len(secondData))}
+	fileID, err = mgr.Upload(bytes.NewReader(secondData), secondHeader)
+	if err != nil {
+		t.Fatalf("second upload failed: %v", err)
+	}
+	if fileID != "same-name.mp3" {
+		t.Fatalf("second file ID = %s, want same-name.mp3", fileID)
+	}
+
+	info, err := os.Stat(filepath.Join(uploadDir, "same-name.mp3"))
+	if err != nil {
+		t.Fatalf("stat uploaded file: %v", err)
+	}
+	if info.Size() != int64(len(secondData)) {
+		t.Fatalf("file size = %d, want %d", info.Size(), len(secondData))
 	}
 }
 

@@ -18,7 +18,6 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=pi-fm-rds-go
 
-NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true

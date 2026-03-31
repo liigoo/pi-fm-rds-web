@@ -43,7 +43,7 @@ body {
     padding: 26px;
     background: linear-gradient(180deg, #f8f8f8, var(--paper));
     display: grid;
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
     gap: 24px;
     box-shadow: 0 10px 36px rgba(0, 0, 0, 0.16);
     zoom: 0.78;
@@ -61,6 +61,7 @@ body {
     grid-template-rows: auto 1fr auto;
     gap: 12px;
     min-height: 720px;
+    min-width: 0;
 }
 
 .spectrum-header {
@@ -203,6 +204,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 18px;
+    min-width: 0;
 }
 
 .section-title-row {
@@ -322,6 +324,7 @@ h2 {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    min-width: 0;
 }
 
 .file-buttons {
@@ -333,7 +336,7 @@ h2 {
     border: 3px solid var(--line);
     border-radius: 8px;
     background: #ffffff;
-    min-height: 164px;
+    min-height: 196px;
     max-height: 230px;
     overflow: auto;
 }
@@ -341,7 +344,20 @@ h2 {
 .file-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;
     font-size: 13px;
+}
+
+.file-table col:first-child {
+    width: auto;
+}
+
+.file-table col:nth-child(2) {
+    width: 78px;
+}
+
+.file-table col:nth-child(3) {
+    width: 94px;
 }
 
 .file-table thead th {
@@ -357,6 +373,14 @@ h2 {
 .file-table tbody td {
     padding: 8px 10px;
     border-bottom: 1px solid #e5e5e5;
+    min-width: 0;
+}
+
+.file-table tbody td:first-child,
+.file-table thead th:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .file-row {
@@ -380,6 +404,7 @@ h2 {
     display: flex;
     justify-content: flex-end;
     gap: 6px;
+    white-space: nowrap;
 }
 
 .btn-queue {

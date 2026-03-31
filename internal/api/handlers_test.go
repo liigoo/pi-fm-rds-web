@@ -84,7 +84,7 @@ func newTestHandler() (*Handler, *mockProcessManager, *mockStorageManager) {
 	plm := playlist.NewManager()
 	am := audio.NewManager(&audio.Config{SampleRate: 44100, Channels: 2})
 	hub := ws.NewHub(10)
-	return NewHandler(pm, sm, plm, am, hub), pm, sm
+	return NewHandler(pm, sm, plm, am, hub, 100.0), pm, sm
 }
 
 func TestFrequencyHandler(t *testing.T) {
@@ -110,6 +110,34 @@ func TestFrequencyHandler(t *testing.T) {
 				t.Errorf("status = %v, want %v", w.Code, tt.wantStatus)
 			}
 		})
+	}
+}
+
+func TestGetStatusReturnsRememberedFrequencyWhenStopped(t *testing.T) {
+	handler, _, _ := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/frequency", strings.NewReader(`{"frequency": 99.9}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.SetFrequency(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("set frequency status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	statusW := httptest.NewRecorder()
+	handler.GetStatus(statusW, statusReq)
+	if statusW.Code != http.StatusOK {
+		t.Fatalf("status = %v, want %v", statusW.Code, http.StatusOK)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(statusW.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+
+	if got := payload["frequency"].(float64); got != 99.9 {
+		t.Fatalf("frequency = %.1f, want 99.9", got)
 	}
 }
 

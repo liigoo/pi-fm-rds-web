@@ -33,6 +33,8 @@ type Handler struct {
 	controlMu sync.Mutex
 	paused    bool
 	stopped   bool
+
+	currentFrequency float64
 }
 
 // NewHandler 创建新的 API 处理器
@@ -42,6 +44,7 @@ func NewHandler(
 	plm playlist.Manager,
 	am *audio.Manager,
 	hub *ws.Hub,
+	defaultFrequency float64,
 ) *Handler {
 	h := &Handler{
 		processManager:  pm,
@@ -52,6 +55,7 @@ func NewHandler(
 		wsHub:           hub,
 		paused:          false,
 		stopped:         true,
+		currentFrequency: defaultFrequency,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
@@ -75,7 +79,12 @@ func (h *Handler) SetFrequency(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.processManager.IsRunning() {
+	h.controlMu.Lock()
+	h.currentFrequency = req.Frequency
+	running := h.processManager.IsRunning()
+	h.controlMu.Unlock()
+
+	if running {
 		if err := h.processManager.Restart(req.Frequency); err != nil {
 			respondError(w, http.StatusInternalServerError, "设置频率失败")
 			return
@@ -101,11 +110,7 @@ func (h *Handler) StartBroadcast(w http.ResponseWriter, r *http.Request) {
 
 	audioStream := h.audioManager.GetAudioStream()
 	if audioStream != nil {
-		status := h.processManager.GetStatus()
-		freq := status.Frequency
-		if freq == 0 {
-			freq = 100.0
-		}
+		freq := h.currentFrequencyLocked()
 		if err := h.processManager.Start(freq, audioStream); err != nil {
 			h.controlMu.Unlock()
 			respondError(w, http.StatusInternalServerError, "启动广播失败: "+err.Error())
@@ -358,11 +363,7 @@ func (h *Handler) startPlaybackForFileLocked(fileID string) error {
 		}
 	}
 
-	status := h.processManager.GetStatus()
-	freq := status.Frequency
-	if freq == 0 {
-		freq = 100.0
-	}
+	freq := h.currentFrequencyLocked()
 
 	if err := h.processManager.Start(freq, audioStream); err != nil {
 		return err
@@ -600,14 +601,19 @@ func (h *Handler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	h.controlMu.Lock()
 	paused := h.paused
 	stopped := h.stopped
+	frequency := h.currentFrequency
 	h.controlMu.Unlock()
+
+	if ps.Frequency >= 87.5 && ps.Frequency <= 108.0 {
+		frequency = ps.Frequency
+	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"running":           ps.Running,
 		"paused":            paused,
 		"stopped":           stopped,
 		"pid":               ps.PID,
-		"frequency":         ps.Frequency,
+		"frequency":         frequency,
 		"start_time":        ps.StartTime,
 		"playlist_count":    len(items),
 		"current_file":      curFileID,
@@ -625,13 +631,27 @@ func (h *Handler) broadcastPlaylist() {
 
 func (h *Handler) broadcastStatus() {
 	ps := h.processManager.GetStatus()
+	frequency := h.currentFrequency
+	if frequency < 87.5 || frequency > 108.0 {
+		frequency = 100.0
+	}
+	if ps.Frequency >= 87.5 && ps.Frequency <= 108.0 {
+		frequency = ps.Frequency
+	}
 
 	h.broadcast("status", map[string]interface{}{
 		"running":   ps.Running,
 		"paused":    h.paused,
-		"frequency": ps.Frequency,
+		"frequency": frequency,
 		"pid":       ps.PID,
 	})
+}
+
+func (h *Handler) currentFrequencyLocked() float64 {
+	if h.currentFrequency >= 87.5 && h.currentFrequency <= 108.0 {
+		return h.currentFrequency
+	}
+	return 100.0
 }
 
 func (h *Handler) broadcast(messageType string, data interface{}) {

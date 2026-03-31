@@ -29,9 +29,10 @@ const App = {
         ]);
 
         const rawFrequency = Number(status?.frequency);
+        const previousFrequency = Number(AppState.getState().frequency);
         const normalizedFrequency = Number.isFinite(rawFrequency) && rawFrequency >= 87.5 && rawFrequency <= 108.0
             ? rawFrequency
-            : 88.0;
+            : (Number.isFinite(previousFrequency) ? previousFrequency : 100.0);
 
         const playlistItems = Array.isArray(playlist?.items) ? playlist.items : [];
         const fileItems = Array.isArray(files?.files) ? files.files : [];
