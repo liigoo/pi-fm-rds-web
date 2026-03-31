@@ -169,7 +169,6 @@ scripts/           # 安装与辅助脚本
 - [gopkg.in/yaml.v3](https://pkg.go.dev/gopkg.in/yaml.v3) - 配置解析
 - [stretchr/testify](https://github.com/stretchr/testify) - 测试断言
 - [FFmpeg](https://ffmpeg.org/) - 音频转码支持
-- [Star History](https://star-history.com/) - Star 趋势图展示
 
 ## 致谢
 
@@ -300,7 +299,6 @@ Environment overrides:
 - [gopkg.in/yaml.v3](https://pkg.go.dev/gopkg.in/yaml.v3)
 - [stretchr/testify](https://github.com/stretchr/testify)
 - [FFmpeg](https://ffmpeg.org/)
-- [Star History](https://star-history.com/)
 
 ## Acknowledgements
 
